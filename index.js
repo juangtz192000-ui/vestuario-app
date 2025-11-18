@@ -1,6 +1,5 @@
 import express from "express";
 import session from "express-session";
-import bcrypt from "bcryptjs";   // ← correcto
 import { pool } from "./db.js";
 
 const app = express();
@@ -8,6 +7,7 @@ app.set("view engine", "ejs");
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
+// Sesión
 app.use(
   session({
     secret: "vestuario123",
@@ -39,9 +39,9 @@ app.post("/login-procesar", async (req, res) => {
     return res.render("index", { error: "Usuario incorrecto" });
 
   const usuarioDB = query.rows[0];
-  const claveCorrecta = await bcrypt.compare(pass, usuarioDB.password);
 
-  if (!claveCorrecta)
+  // 🔥 SIN BCRYPT → Validación simple
+  if (pass !== usuarioDB.password)
     return res.render("index", { error: "Contraseña incorrecta" });
 
   req.session.user = usuarioDB.usuario;
@@ -53,7 +53,7 @@ app.get("/menu", isLogged, (req, res) => {
   res.render("menu");
 });
 
-// LISTADOS Y FORMULARIOS
+// BAILARINES
 app.get("/bailarines", isLogged, async (req, res) => {
   const q = await pool.query("SELECT * FROM bailarines ORDER BY id DESC");
   res.render("bailarines", { lista: q.rows });
@@ -70,6 +70,7 @@ app.post("/bailarines", isLogged, async (req, res) => {
   res.redirect("/bailarines");
 });
 
+// VESTUARIO
 app.get("/vestuario", isLogged, async (req, res) => {
   const q = await pool.query("SELECT * FROM inventario ORDER BY id DESC");
   res.render("vestuario", { lista: q.rows });
@@ -86,7 +87,7 @@ app.post("/guardar-vestuario", isLogged, async (req, res) => {
   res.redirect("/vestuario");
 });
 
-// Entrega
+// ENTREGA
 app.get("/entrega", isLogged, async (req, res) => {
   const bailarines = await pool.query("SELECT * FROM bailarines");
   const inventario = await pool.query("SELECT * FROM inventario");
@@ -98,14 +99,16 @@ app.get("/entrega", isLogged, async (req, res) => {
 
 app.post("/entregar", isLogged, async (req, res) => {
   const { bailarin, vestuario, cantidad } = req.body;
+
   await pool.query(
     "INSERT INTO entregas(id_bailarin, id_inventario, cantidad) VALUES($1,$2,$3)",
     [bailarin, vestuario, cantidad]
   );
+
   res.redirect("/entrega");
 });
 
-// Devolución
+// DEVOLUCIÓN
 app.get("/devolucion", isLogged, async (req, res) => {
   const entregas = await pool.query(`
     SELECT e.id, b.nombre AS bailarin, i.nombre AS prenda
@@ -119,11 +122,15 @@ app.get("/devolucion", isLogged, async (req, res) => {
 
 app.post("/devolver", isLogged, async (req, res) => {
   const { entrega } = req.body;
-  await pool.query("INSERT INTO devoluciones(id_entrega) VALUES($1)", [entrega]);
+
+  await pool.query("INSERT INTO devoluciones(id_entrega) VALUES($1)", [
+    entrega
+  ]);
+
   res.redirect("/devolucion");
 });
 
-// Historial
+// HISTORIAL
 app.get("/historial", isLogged, async (req, res) => {
   const q = await pool.query(`
     SELECT 
@@ -155,11 +162,12 @@ app.get("/historial", isLogged, async (req, res) => {
   res.render("historial", { lista: q.rows });
 });
 
-// Cerrar sesión
+// LOGOUT
 app.get("/logout", (req, res) => {
   req.session.destroy();
   res.redirect("/");
 });
 
+// PUERTO
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Servidor corriendo en puerto " + PORT));

@@ -1,6 +1,5 @@
 import express from "express";
 import session from "express-session";
-import bcrypt from "bcryptjs";   // ← corregido
 import { pool } from "./db.js";
 
 const app = express();
@@ -8,6 +7,7 @@ app.set("view engine", "ejs");
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
+// Sesión
 app.use(
   session({
     secret: "vestuario123",
@@ -40,10 +40,8 @@ app.post("/login-procesar", async (req, res) => {
 
   const usuarioDB = query.rows[0];
 
-  // Comparar contraseña con bcryptjs
-  const claveCorrecta = await bcrypt.compare(pass, usuarioDB.pass);
-
-  if (!claveCorrecta)
+  // 🔥 SIN BCRYPT → Validación simple
+  if (pass !== usuarioDB.password)
     return res.render("index", { error: "Contraseña incorrecta" });
 
   req.session.user = usuarioDB.usuario;
@@ -55,7 +53,7 @@ app.get("/menu", isLogged, (req, res) => {
   res.render("menu");
 });
 
-// LISTADO DE BAILARINES
+// BAILARINES
 app.get("/bailarines", isLogged, async (req, res) => {
   const q = await pool.query("SELECT * FROM bailarines ORDER BY id DESC");
   res.render("bailarines", { lista: q.rows });
@@ -101,10 +99,12 @@ app.get("/entrega", isLogged, async (req, res) => {
 
 app.post("/entregar", isLogged, async (req, res) => {
   const { bailarin, vestuario, cantidad } = req.body;
+
   await pool.query(
     "INSERT INTO entregas(id_bailarin, id_inventario, cantidad) VALUES($1,$2,$3)",
     [bailarin, vestuario, cantidad]
   );
+
   res.redirect("/entrega");
 });
 
@@ -122,7 +122,11 @@ app.get("/devolucion", isLogged, async (req, res) => {
 
 app.post("/devolver", isLogged, async (req, res) => {
   const { entrega } = req.body;
-  await pool.query("INSERT INTO devoluciones(id_entrega) VALUES($1)", [entrega]);
+
+  await pool.query("INSERT INTO devoluciones(id_entrega) VALUES($1)", [
+    entrega
+  ]);
+
   res.redirect("/devolucion");
 });
 
@@ -165,6 +169,5 @@ app.get("/logout", (req, res) => {
 });
 
 // PUERTO
-app.listen(process.env.PORT || 3000, () =>
-  console.log("Servidor corriendo en puerto 3000")
-);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Servidor corriendo en puerto " + PORT));
